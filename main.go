@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
@@ -158,6 +159,8 @@ func sendMessage(w *wallet.Wallet, api *ton.APIClient, ctx context.Context) erro
 			log.Println("Transfer err:", err.Error())
 			return nil
 		}
+
+		time.Sleep(4 * time.Second)
 
 		log.Printf("Transaction sent")
 		return nil
