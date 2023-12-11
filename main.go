@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -103,26 +102,75 @@ func sendMessage(w *wallet.Wallet, api *ton.APIClient, ctx context.Context) erro
 		return err
 	}
 
-	if balance.Nano().Uint64() < 1.5e7 {
-		log.Println("Not enough balance:", balance.String(), "\nRequired minimum: 0.015 TON")
-		return errors.New("not enough balance")
+	if balance.Nano().Uint64() >= 1.4e7 {
+		log.Println("sending transaction and waiting for confirmation...")
+
+		comment, err := wallet.CreateCommentCell("data:application/json,{\"p\":\"ton-20\",\"op\":\"mint\",\"tick\":\"nano\",\"amt\":\"100000000000\"}")
+		if err != nil {
+			log.Println("CreateCommentCell err:", err.Error())
+			return err
+		}
+
+		var messages []*wallet.Message
+		// generate message for each destination, in single transaction can be sent up to 254 messages
+		messages = append(messages, &wallet.Message{
+			Mode: 1, // pay fee separately
+			InternalMessage: &tlb.InternalMessage{
+				Bounce:  false, // force send, even to uninitialized wallets
+				DstAddr: w.WalletAddress(),
+				Amount:  tlb.MustFromTON("0"),
+				Body:    comment,
+			},
+		})
+
+		messages = append(messages, &wallet.Message{
+			Mode: 1, // pay fee separately
+			InternalMessage: &tlb.InternalMessage{
+				Bounce:  false, // force send, even to uninitialized wallets
+				DstAddr: w.WalletAddress(),
+				Amount:  tlb.MustFromTON("0"),
+				Body:    comment,
+			},
+		})
+
+		messages = append(messages, &wallet.Message{
+			Mode: 1, // pay fee separately
+			InternalMessage: &tlb.InternalMessage{
+				Bounce:  false, // force send, even to uninitialized wallets
+				DstAddr: w.WalletAddress(),
+				Amount:  tlb.MustFromTON("0"),
+				Body:    comment,
+			},
+		})
+
+		messages = append(messages, &wallet.Message{
+			Mode: 1, // pay fee separately
+			InternalMessage: &tlb.InternalMessage{
+				Bounce:  false, // force send, even to uninitialized wallets
+				DstAddr: w.WalletAddress(),
+				Amount:  tlb.MustFromTON("0"),
+				Body:    comment,
+			},
+		})
+
+		tx, block, err := w.SendManyWaitTransaction(ctx, messages)
+
+		if err != nil {
+			log.Println("Transfer err:", err.Error())
+			return nil
+		}
+
+		balance, err = w.GetBalance(ctx, block)
+		if err != nil {
+			log.Println("GetBalance err:", err.Error())
+			return err
+		}
+
+		log.Printf("transaction confirmed at block %d, hash: %s balance left: %s", block.SeqNo,
+			base64.StdEncoding.EncodeToString(tx.Hash), balance.String())
+
+		return nil
 	}
-
-	bounce := false
-	transfer, err := w.BuildTransfer(w.WalletAddress(), tlb.MustFromTON("0"), bounce, "data:application/json,{\"p\":\"ton-20\",\"op\":\"mint\",\"tick\":\"nano\",\"amt\":\"100000000000\"}")
-	if err != nil {
-		log.Println("Transfer err:", err.Error())
-		return err
-	}
-
-	tx, _, err := w.SendWaitTransaction(ctx, transfer)
-	if err != nil {
-		log.Println("SendWaitTransaction err:", err.Error())
-		return err
-	}
-
-	log.Println("transaction sent, hash:", base64.StdEncoding.EncodeToString(tx.Hash))
-	log.Println("explorer link: https://tonscan.org/tx/" + base64.URLEncoding.EncodeToString(tx.Hash))
-
+	log.Println("not enough balance:", balance.String())
 	return nil
 }
