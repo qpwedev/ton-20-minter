@@ -29,11 +29,11 @@ jobs:
 
       - name: Build
         run: |
-          if [ "${{ matrix.goos }}" = "windows" ]; then
+          if ($env:matrix_goos -eq "windows") {
             go build
-          else
-            GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build
-          fi
+          } else {
+            $env:GOOS=$env:matrix_goos; $env:GOARCH=$env:matrix_goarch; go build
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
