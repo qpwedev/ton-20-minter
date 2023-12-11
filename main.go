@@ -53,14 +53,18 @@ func main() {
 	}
 
 	// Repeat sending transactions txAmount times.
-	for txAmount > 0 && txAmount != 0 {
-		log.Println("Sending transaction")
-		if err := sendMessage(w, api, client); err != nil {
-			log.Println("Error sending messages:", err.Error())
+	for {
+		for i := 0; i < 50; i++ {
+			go func() {
+				log.Println("Sending transaction")
+				if err := sendMessage(w, api, client); err != nil {
+					log.Println("Error sending messages:", err.Error())
+				}
+				log.Println("Sent", txAmount, "transactions")
+				txAmount -= 1
+			}()
 		}
-
-		log.Println("Sent", txAmount, "transactions")
-		txAmount -= 1
+		time.Sleep(4 * time.Second)
 	}
 
 }
