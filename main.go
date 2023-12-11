@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
@@ -31,6 +30,8 @@ func main() {
 	}
 
 	api := ton.NewAPIClient(client)
+
+	ctx := client.StickyContext(context.Background())
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -57,27 +58,13 @@ func main() {
 
 	// Repeat sending transactions txAmount times.
 	for txAmount > 0 && txAmount != 0 {
-		var txAmountToSend int
-
-		if txAmount/100 > 0 {
-			txAmountToSend = 100
-		} else {
-			txAmountToSend = txAmount
-		}
-
-		messages, err := formSendMessages(txAmountToSend)
-		if err != nil {
-			log.Println("Error forming messages:", err.Error())
-			return
-		}
-
-		log.Println("Sending", txAmountToSend, "transactions")
-		if err := sendMessages(w, messages, api); err != nil {
+		log.Println("Sending transaction")
+		if err := sendMessage(w, api, ctx); err != nil {
 			log.Println("Error sending messages:", err.Error())
 		}
 
-		log.Println("Sent", txAmountToSend, "transactions")
-		txAmount -= txAmountToSend
+		log.Println("Sent", txAmount, "transactions")
+		txAmount -= 1
 	}
 
 }
@@ -92,7 +79,7 @@ func initiateWallet(seedPhrase *string, api *ton.APIClient) *wallet.Wallet {
 		words = strings.Split(*seedPhrase, " ")
 	}
 
-	w, err := wallet.FromSeed(api, words, wallet.HighloadV2R2)
+	w, err := wallet.FromSeed(api, words, wallet.V4R2)
 	if err != nil {
 		log.Fatalln("FromSeed err:", err.Error())
 		return nil
@@ -103,40 +90,7 @@ func initiateWallet(seedPhrase *string, api *ton.APIClient) *wallet.Wallet {
 	return w
 }
 
-func formSendMessages(txAmount int) ([]*wallet.Message, error) {
-	var receivers []Receiver
-
-	for i := 0; i < txAmount; i++ {
-		receivers = append(receivers, Receiver{
-			Address: "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c",
-			Amount:  "0",
-		})
-	}
-
-	comment, err := wallet.CreateCommentCell("data:application/json,{\"p\":\"ton-20\",\"op\":\"mint\",\"tick\":\"nano\",\"amt\":\"100000000000\"}")
-	if err != nil {
-		log.Fatalln("CreateComment err:", err.Error())
-		return nil, err
-	}
-
-	var messages []*wallet.Message
-
-	for _, receiver := range receivers {
-		messages = append(messages, &wallet.Message{
-			Mode: 1, // pay fee separately
-			InternalMessage: &tlb.InternalMessage{
-				Bounce:  false,
-				DstAddr: address.MustParseAddr(receiver.Address),
-				Amount:  tlb.MustFromTON(receiver.Amount),
-				Body:    comment,
-			},
-		})
-	}
-
-	return messages, nil
-}
-
-func sendMessages(w *wallet.Wallet, messages []*wallet.Message, api *ton.APIClient) error {
+func sendMessage(w *wallet.Wallet, api *ton.APIClient, ctx context.Context) error {
 	block, err := api.CurrentMasterchainInfo(context.Background())
 	if err != nil {
 		log.Println("CurrentMasterchainInfo err:", err.Error())
@@ -149,19 +103,26 @@ func sendMessages(w *wallet.Wallet, messages []*wallet.Message, api *ton.APIClie
 		return err
 	}
 
-	if balance.Nano().Uint64() < 6e8 {
-		log.Println("Not enough balance:", balance.String(), "\nRequired minimum: 0.6 TON")
+	if balance.Nano().Uint64() < 1.5e7 {
+		log.Println("Not enough balance:", balance.String(), "\nRequired minimum: 0.015 TON")
 		return errors.New("not enough balance")
 	}
 
-	txHash, err := w.SendManyWaitTxHash(context.Background(), messages)
+	bounce := false
+	transfer, err := w.BuildTransfer(w.WalletAddress(), tlb.MustFromTON("0"), bounce, "data:application/json,{\"p\":\"ton-20\",\"op\":\"mint\",\"tick\":\"nano\",\"amt\":\"100000000000\"}")
 	if err != nil {
 		log.Println("Transfer err:", err.Error())
 		return err
 	}
 
-	log.Println("transaction sent, hash:", base64.StdEncoding.EncodeToString(txHash))
-	log.Println("explorer link: https://tonscan.org/tx/" + base64.URLEncoding.EncodeToString(txHash))
+	tx, _, err := w.SendWaitTransaction(ctx, transfer)
+	if err != nil {
+		log.Println("SendWaitTransaction err:", err.Error())
+		return err
+	}
+
+	log.Println("transaction sent, hash:", base64.StdEncoding.EncodeToString(tx.Hash))
+	log.Println("explorer link: https://tonscan.org/tx/" + base64.URLEncoding.EncodeToString(tx.Hash))
 
 	return nil
 }
