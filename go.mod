@@ -1,4 +1,4 @@
-module github.com/tonft-app/highload-wallet-server
+module github.com/qpwedev/ton-20-minter
 
 go 1.20
 

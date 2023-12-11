@@ -29,9 +29,6 @@ func main() {
 	}
 
 	api := ton.NewAPIClient(client)
-
-	ctx := client.StickyContext(context.Background())
-
 	reader := bufio.NewReader(os.Stdin)
 
 	// Get seed phrase from user
@@ -58,7 +55,7 @@ func main() {
 	// Repeat sending transactions txAmount times.
 	for txAmount > 0 && txAmount != 0 {
 		log.Println("Sending transaction")
-		if err := sendMessage(w, api, ctx); err != nil {
+		if err := sendMessage(w, api, client); err != nil {
 			log.Println("Error sending messages:", err.Error())
 		}
 
@@ -89,7 +86,9 @@ func initiateWallet(seedPhrase *string, api *ton.APIClient) *wallet.Wallet {
 	return w
 }
 
-func sendMessage(w *wallet.Wallet, api *ton.APIClient, ctx context.Context) error {
+func sendMessage(w *wallet.Wallet, api *ton.APIClient, client *liteclient.ConnectionPool) error {
+	ctx := client.StickyContext(context.Background())
+
 	block, err := api.CurrentMasterchainInfo(context.Background())
 	if err != nil {
 		log.Println("CurrentMasterchainInfo err:", err.Error())
@@ -111,9 +110,7 @@ func sendMessage(w *wallet.Wallet, api *ton.APIClient, ctx context.Context) erro
 			return err
 		}
 
-		var messages []*wallet.Message
-		// generate message for each destination, in single transaction can be sent up to 254 messages
-		messages = append(messages, &wallet.Message{
+		transfer := &wallet.Message{
 			Mode: 1, // pay fee separately
 			InternalMessage: &tlb.InternalMessage{
 				Bounce:  false, // force send, even to uninitialized wallets
@@ -121,46 +118,16 @@ func sendMessage(w *wallet.Wallet, api *ton.APIClient, ctx context.Context) erro
 				Amount:  tlb.MustFromTON("0"),
 				Body:    comment,
 			},
-		})
+		}
 
-		messages = append(messages, &wallet.Message{
-			Mode: 1, // pay fee separately
-			InternalMessage: &tlb.InternalMessage{
-				Bounce:  false, // force send, even to uninitialized wallets
-				DstAddr: w.WalletAddress(),
-				Amount:  tlb.MustFromTON("0"),
-				Body:    comment,
-			},
-		})
-
-		messages = append(messages, &wallet.Message{
-			Mode: 1, // pay fee separately
-			InternalMessage: &tlb.InternalMessage{
-				Bounce:  false, // force send, even to uninitialized wallets
-				DstAddr: w.WalletAddress(),
-				Amount:  tlb.MustFromTON("0"),
-				Body:    comment,
-			},
-		})
-
-		messages = append(messages, &wallet.Message{
-			Mode: 1, // pay fee separately
-			InternalMessage: &tlb.InternalMessage{
-				Bounce:  false, // force send, even to uninitialized wallets
-				DstAddr: w.WalletAddress(),
-				Amount:  tlb.MustFromTON("0"),
-				Body:    comment,
-			},
-		})
-
-		err = w.SendMany(ctx, messages)
+		err = w.SendMany(ctx, []*wallet.Message{transfer, transfer, transfer, transfer})
 
 		if err != nil {
 			log.Println("Transfer err:", err.Error())
 			return nil
 		}
 
-		time.Sleep(4 * time.Second)
+		time.Sleep(1 * time.Second)
 
 		log.Printf("Transaction sent")
 		return nil
