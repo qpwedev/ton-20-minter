@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -153,22 +152,14 @@ func sendMessage(w *wallet.Wallet, api *ton.APIClient, ctx context.Context) erro
 			},
 		})
 
-		tx, block, err := w.SendManyWaitTransaction(ctx, messages)
+		err = w.SendMany(ctx, messages)
 
 		if err != nil {
 			log.Println("Transfer err:", err.Error())
 			return nil
 		}
 
-		balance, err = w.GetBalance(ctx, block)
-		if err != nil {
-			log.Println("GetBalance err:", err.Error())
-			return err
-		}
-
-		log.Printf("transaction confirmed at block %d, hash: %s balance left: %s", block.SeqNo,
-			base64.StdEncoding.EncodeToString(tx.Hash), balance.String())
-
+		log.Printf("Transaction sent")
 		return nil
 	}
 	log.Println("not enough balance:", balance.String())
