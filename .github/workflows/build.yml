@@ -9,13 +9,21 @@ on:
 jobs:
   build:
     name: Build
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         goos: [windows, darwin, linux]
         goarch: [amd64]
         include:
           - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            extension: .exe
+          - goos: linux
+            goarch: amd64
+        exclude:
+          - goos: windows
             goarch: arm64
 
     steps:
@@ -29,14 +37,15 @@ jobs:
 
       - name: Build
         run: |
-          if ($env:matrix_goos -eq "windows") {
-            go build
-          } else {
-            $env:GOOS=$env:matrix_goos; $env:GOARCH=$env:matrix_goarch; go build
-          }
+          export GOOS=${{ matrix.goos }}
+          export GOARCH=${{ matrix.goarch }}
+          go build -o ton-20-minter${{ matrix.extension }}
+
+      - name: List output files
+        run: ls
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: build-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ./ton-20-minter
+          path: ./ton-20-minter${{ matrix.extension }}
